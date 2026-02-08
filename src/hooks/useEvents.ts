@@ -131,13 +131,28 @@ export function useRegisterForEvent() {
         if (error.code === "23505") throw new Error("Already registered");
         throw error;
       }
+      return eventId;
     },
-    onSuccess: (_, eventId) => {
+    onSuccess: async (eventId) => {
       toast.success("Registered successfully!");
       qc.invalidateQueries({ queryKey: ["registration", eventId] });
       qc.invalidateQueries({ queryKey: ["events"] });
       qc.invalidateQueries({ queryKey: ["event", eventId] });
       qc.invalidateQueries({ queryKey: ["my-registrations"] });
+      
+      // Send confirmation email in background
+      try {
+        const { error } = await supabase.functions.invoke("send-registration-email", {
+          body: { eventId, userId: user!.id },
+        });
+        if (error) {
+          console.error("Email notification failed:", error);
+        } else {
+          toast.success("Confirmation email sent!");
+        }
+      } catch (emailErr) {
+        console.error("Email notification error:", emailErr);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
