@@ -60,10 +60,10 @@ serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Fetch event details
+    // Fetch event details with organizer info
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("title, description, venue, event_date, profiles!events_organizer_id_fkey(full_name)")
+      .select("title, description, venue, event_date, organizer_id, category, profiles!events_organizer_id_fkey(full_name)")
       .eq("id", eventId)
       .single();
 
@@ -76,18 +76,25 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // Fetch participant profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: participantProfile, error: profileError } = await supabase
       .from("profiles")
       .select("full_name")
       .eq("id", userId)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError || !participantProfile) {
       console.error("Profile fetch error:", profileError);
       return new Response(JSON.stringify({ error: "Profile not found" }), {
         status: 404,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
+    }
+
+    // Fetch organizer's email from auth.users
+    const { data: organizerAuth, error: organizerAuthError } = await supabase.auth.admin.getUserById(event.organizer_id);
+    
+    if (organizerAuthError) {
+      console.error("Organizer auth fetch error:", organizerAuthError);
     }
 
     const eventDate = new Date(event.event_date);
@@ -103,14 +110,118 @@ serve(async (req: Request): Promise<Response> => {
     });
 
     const organizerName = (event as any).profiles?.full_name || "Campus Events";
+    const organizerEmail = organizerAuth?.user?.email;
+    const participantName = participantProfile.full_name || "A participant";
+    const categoryLabel = event.category ? event.category.charAt(0).toUpperCase() + event.category.slice(1) : "Event";
 
-    console.log(`Sending email to ${user.email} for event "${event.title}"`);
+    // Email template for participant
+    const participantEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);">
+          
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #ea6852 100%); padding: 40px 32px; text-align: center;">
+            <div style="background: rgba(255,255,255,0.15); display: inline-block; padding: 8px 16px; border-radius: 20px; margin-bottom: 16px;">
+              <span style="color: white; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${categoryLabel}</span>
+            </div>
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">🎉 You're Registered!</h1>
+          </div>
+          
+          <!-- Content -->
+          <div style="padding: 32px;">
+            <p style="color: #374151; font-size: 16px; margin: 0 0 24px; line-height: 1.6;">
+              Hi <strong>${participantName}</strong>,
+            </p>
+            
+            <p style="color: #374151; font-size: 16px; margin: 0 0 24px; line-height: 1.6;">
+              Great news! Your registration for the following event has been confirmed:
+            </p>
+            
+            <!-- Event Card -->
+            <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 0 0 24px;">
+              <h2 style="color: #1e293b; font-size: 22px; margin: 0 0 20px; font-weight: 700;">${event.title}</h2>
+              
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #64748b; font-size: 14px;">📅 Date</span>
+                  </td>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 600;">${formattedDate}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #64748b; font-size: 14px;">⏰ Time</span>
+                  </td>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 600;">${formattedTime}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #64748b; font-size: 14px;">📍 Venue</span>
+                  </td>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 600;">${event.venue}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #64748b; font-size: 14px;">👤 Organizer</span>
+                  </td>
+                  <td style="padding: 8px 0; vertical-align: top;">
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 600;">${organizerName}</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            
+            ${event.description ? `
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
+              <p style="color: #92400e; font-size: 14px; margin: 0; line-height: 1.6;">
+                <strong>About:</strong> ${event.description.substring(0, 250)}${event.description.length > 250 ? "..." : ""}
+              </p>
+            </div>
+            ` : ""}
+            
+            <p style="color: #374151; font-size: 16px; margin: 0; line-height: 1.6;">
+              We look forward to seeing you there! 🎓
+            </p>
+          </div>
+          
+          <!-- Footer -->
+          <div style="background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+              CampusEvents — Your campus event hub
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
 
-    const emailResponse = await resend.emails.send({
+    // Send confirmation email to participant
+    console.log(`Sending confirmation email to participant: ${user.email}`);
+    const participantEmailResponse = await resend.emails.send({
       from: "CampusEvents <onboarding@resend.dev>",
       to: [user.email!],
-      subject: `Registration Confirmed: ${event.title}`,
-      html: `
+      subject: `✅ Registration Confirmed: ${event.title}`,
+      html: participantEmailHtml,
+    });
+
+    console.log("Participant email sent:", participantEmailResponse);
+
+    // Send notification email to organizer (if we have their email)
+    let organizerEmailResponse = null;
+    if (organizerEmail && organizerEmail !== user.email) {
+      const organizerEmailHtml = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -118,72 +229,96 @@ serve(async (req: Request): Promise<Response> => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; margin: 0; padding: 20px;">
-          <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);">
             
             <!-- Header -->
-            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 32px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">🎉 You're Registered!</h1>
+            <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #10b981 100%); padding: 40px 32px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">🆕 New Registration!</h1>
             </div>
             
             <!-- Content -->
             <div style="padding: 32px;">
-              <p style="color: #374151; font-size: 16px; margin: 0 0 24px;">
-                Hi <strong>${profile.full_name || "there"}</strong>,
+              <p style="color: #374151; font-size: 16px; margin: 0 0 24px; line-height: 1.6;">
+                Hi <strong>${organizerName}</strong>,
               </p>
               
-              <p style="color: #374151; font-size: 16px; margin: 0 0 24px;">
-                Great news! Your registration for the following event has been confirmed:
+              <p style="color: #374151; font-size: 16px; margin: 0 0 24px; line-height: 1.6;">
+                Great news! Someone just registered for your event.
               </p>
               
-              <!-- Event Card -->
-              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; margin: 0 0 24px;">
-                <h2 style="color: #1e3a5f; font-size: 20px; margin: 0 0 16px;">${event.title}</h2>
-                
-                <div style="margin: 0 0 12px;">
-                  <span style="color: #6b7280; font-size: 14px;">📅 Date:</span>
-                  <span style="color: #374151; font-size: 14px; font-weight: 500;"> ${formattedDate}</span>
-                </div>
-                
-                <div style="margin: 0 0 12px;">
-                  <span style="color: #6b7280; font-size: 14px;">⏰ Time:</span>
-                  <span style="color: #374151; font-size: 14px; font-weight: 500;"> ${formattedTime}</span>
-                </div>
-                
-                <div style="margin: 0 0 12px;">
-                  <span style="color: #6b7280; font-size: 14px;">📍 Venue:</span>
-                  <span style="color: #374151; font-size: 14px; font-weight: 500;"> ${event.venue}</span>
-                </div>
-                
-                <div style="margin: 0;">
-                  <span style="color: #6b7280; font-size: 14px;">👤 Organized by:</span>
-                  <span style="color: #374151; font-size: 14px; font-weight: 500;"> ${organizerName}</span>
-                </div>
+              <!-- Participant Info Card -->
+              <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 1px solid #a7f3d0; border-radius: 12px; padding: 24px; margin: 0 0 24px;">
+                <h3 style="color: #065f46; font-size: 14px; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 1px;">New Participant</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 8px 0; vertical-align: top;">
+                      <span style="color: #047857; font-size: 14px;">👤 Name</span>
+                    </td>
+                    <td style="padding: 8px 0; vertical-align: top;">
+                      <span style="color: #065f46; font-size: 14px; font-weight: 600;">${participantName}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; vertical-align: top;">
+                      <span style="color: #047857; font-size: 14px;">📧 Email</span>
+                    </td>
+                    <td style="padding: 8px 0; vertical-align: top;">
+                      <span style="color: #065f46; font-size: 14px; font-weight: 600;">${user.email}</span>
+                    </td>
+                  </tr>
+                </table>
               </div>
               
-              <p style="color: #6b7280; font-size: 14px; margin: 0 0 24px;">
-                ${event.description ? `<strong>About:</strong> ${event.description.substring(0, 200)}${event.description.length > 200 ? "..." : ""}` : ""}
-              </p>
+              <!-- Event Info Card -->
+              <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 0 0 24px;">
+                <h3 style="color: #475569; font-size: 14px; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 1px;">Event Details</h3>
+                <h2 style="color: #1e293b; font-size: 20px; margin: 0 0 16px; font-weight: 700;">${event.title}</h2>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0; vertical-align: top;">
+                      <span style="color: #64748b; font-size: 13px;">📅 ${formattedDate} at ${formattedTime}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; vertical-align: top;">
+                      <span style="color: #64748b; font-size: 13px;">📍 ${event.venue}</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
               
-              <p style="color: #374151; font-size: 14px; margin: 0;">
-                We look forward to seeing you there! 🎓
+              <p style="color: #6b7280; font-size: 14px; margin: 0; line-height: 1.6;">
+                Log in to your dashboard to view all registrations.
               </p>
             </div>
             
             <!-- Footer -->
             <div style="background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+              <p style="color: #94a3b8; font-size: 12px; margin: 0;">
                 CampusEvents — Your campus event hub
               </p>
             </div>
           </div>
         </body>
         </html>
-      `,
-    });
+      `;
 
-    console.log("Email sent successfully:", emailResponse);
+      console.log(`Sending notification email to organizer: ${organizerEmail}`);
+      organizerEmailResponse = await resend.emails.send({
+        from: "CampusEvents <onboarding@resend.dev>",
+        to: [organizerEmail],
+        subject: `🆕 New Registration: ${participantName} registered for ${event.title}`,
+        html: organizerEmailHtml,
+      });
 
-    return new Response(JSON.stringify({ success: true, emailId: emailResponse.data?.id }), {
+      console.log("Organizer email sent:", organizerEmailResponse);
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      participantEmailId: participantEmailResponse.data?.id,
+      organizerEmailId: organizerEmailResponse?.data?.id 
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
