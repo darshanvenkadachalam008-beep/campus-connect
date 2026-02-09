@@ -10,6 +10,7 @@ export interface Event {
   venue: string;
   event_date: string;
   status: string;
+  category: string;
   organizer_id: string;
   created_at: string;
   organizer_name?: string;
@@ -185,7 +186,7 @@ export function useCreateEvent() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (event: { title: string; description: string; venue: string; event_date: string }) => {
+    mutationFn: async (event: { title: string; description: string; venue: string; event_date: string; category: string }) => {
       const { error } = await supabase
         .from("events")
         .insert({ ...event, organizer_id: user!.id });

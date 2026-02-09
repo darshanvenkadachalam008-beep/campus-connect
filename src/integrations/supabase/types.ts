@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       events: {
         Row: {
+          category: string
           created_at: string
           description: string
           event_date: string
@@ -27,6 +28,7 @@ export type Database = {
           venue: string
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string
           event_date: string
@@ -38,6 +40,7 @@ export type Database = {
           venue?: string
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string
           event_date?: string
