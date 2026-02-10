@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import Events from "./pages/Events";
 import EventDetail from "./pages/EventDetail";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
+import OrganizerAnalytics from "./pages/OrganizerAnalytics";
 import ParticipantDashboard from "./pages/ParticipantDashboard";
 import NotFound from "./pages/NotFound";
 
