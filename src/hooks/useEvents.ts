@@ -13,6 +13,8 @@ export interface Event {
   category: string;
   organizer_id: string;
   created_at: string;
+  max_capacity?: number | null;
+  registration_deadline?: string | null;
   organizer_name?: string;
   registration_count?: number;
 }
