@@ -2,3 +2,9 @@ project_id = "oaohprtzcqzjrchtlaxr"
 
 [functions.send-registration-email]
 verify_jwt = false
+
+[functions.ai-assistant]
+verify_jwt = false
+
+[functions.event-lifecycle]
+verify_jwt = false
