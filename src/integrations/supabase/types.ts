@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      event_views: {
+        Row: {
+          event_id: string
+          id: string
+          user_id: string | null
+          viewed_at: string
+        }
+        Insert: {
+          event_id: string
+          id?: string
+          user_id?: string | null
+          viewed_at?: string
+        }
+        Update: {
+          event_id?: string
+          id?: string
+          user_id?: string | null
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_views_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_views_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           category: string
@@ -21,7 +57,9 @@ export type Database = {
           description: string
           event_date: string
           id: string
+          max_capacity: number | null
           organizer_id: string
+          registration_deadline: string | null
           status: string
           title: string
           updated_at: string
@@ -33,7 +71,9 @@ export type Database = {
           description?: string
           event_date: string
           id?: string
+          max_capacity?: number | null
           organizer_id: string
+          registration_deadline?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -45,7 +85,9 @@ export type Database = {
           description?: string
           event_date?: string
           id?: string
+          max_capacity?: number | null
           organizer_id?: string
+          registration_deadline?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -61,21 +103,72 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          id: string
+          message: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          message: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
+          email: string | null
           full_name: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
         }
         Insert: {
           created_at?: string
+          email?: string | null
           full_name?: string
           id: string
           role?: Database["public"]["Enums"]["app_role"]
         }
         Update: {
           created_at?: string
+          email?: string | null
           full_name?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
@@ -111,6 +204,45 @@ export type Database = {
           },
           {
             foreignKeyName: "registrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waitlist: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          promoted_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          promoted_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          promoted_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
