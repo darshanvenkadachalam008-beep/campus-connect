@@ -188,10 +188,13 @@ export function useCreateEvent() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (event: { title: string; description: string; venue: string; event_date: string; category: string }) => {
+    mutationFn: async (event: { title: string; description: string; venue: string; event_date: string; category: string; max_capacity?: number; registration_deadline?: string }) => {
+      const insertData: any = { ...event, organizer_id: user!.id };
+      if (!event.max_capacity) delete insertData.max_capacity;
+      if (!event.registration_deadline) delete insertData.registration_deadline;
       const { error } = await supabase
         .from("events")
-        .insert({ ...event, organizer_id: user!.id });
+        .insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
