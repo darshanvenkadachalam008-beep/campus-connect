@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyEvents, useCreateEvent, useEventRegistrants } from "@/hooks/useEvents";
+import { useAIGenerateDescription, useAIDetectConflicts } from "@/hooks/useAI";
+import { useAllEvents } from "@/hooks/useEvents";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Calendar, MapPin, Users, Eye, Sparkles } from "lucide-react";
+import { Plus, Calendar, MapPin, Users, Eye, Sparkles, BarChart3, AlertTriangle, Wand2 } from "lucide-react";
 import { format } from "date-fns";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -34,7 +36,6 @@ const eventSchema = z.object({
 
 function RegistrantsDialog({ eventId, eventTitle }: { eventId: string; eventTitle: string }) {
   const { data: registrants, isLoading } = useEventRegistrants(eventId);
-
   return (
     <DialogContent className="max-w-md">
       <DialogHeader>
@@ -45,18 +46,12 @@ function RegistrantsDialog({ eventId, eventTitle }: { eventId: string; eventTitl
       </DialogHeader>
       {isLoading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />
-          ))}
+          {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
         </div>
       ) : registrants && registrants.length > 0 ? (
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {registrants.map((r, index) => (
-            <div 
-              key={r.id} 
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-muted/50 to-muted/30 rounded-xl border border-border/50 hover:border-primary/30 transition-colors"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
+          {registrants.map((r: any) => (
+            <div key={r.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
                   {r.name.charAt(0).toUpperCase()}
@@ -90,46 +85,70 @@ const categoryConfig: Record<string, { icon: string; gradient: string }> = {
 export default function OrganizerDashboard() {
   const { user, profile, loading } = useAuth();
   const { data: events, isLoading } = useMyEvents();
+  const { data: allEvents } = useAllEvents();
   const createEvent = useCreateEvent();
+  const generateDesc = useAIGenerateDescription();
+  const detectConflicts = useAIDetectConflicts();
   const [open, setOpen] = useState(false);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<any>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [venue, setVenue] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [category, setCategory] = useState("workshop");
+  const [maxCapacity, setMaxCapacity] = useState("");
+  const [regDeadline, setRegDeadline] = useState("");
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
   if (profile?.role !== "organizer") return <Navigate to="/dashboard/participant" replace />;
 
+  const handleAIGenerate = async () => {
+    if (!title) { toast.error("Enter a title first"); return; }
+    const result = await generateDesc.mutateAsync({ title, category, venue: venue || "TBD" });
+    setDescription(result);
+    toast.success("AI description generated!");
+  };
+
+  const handleConflictCheck = async () => {
+    if (!eventDate || !venue) { toast.error("Set date and venue first"); return; }
+    const result = await detectConflicts.mutateAsync({
+      newEvent: { title, category, venue, event_date: eventDate },
+      existingEvents: allEvents || [],
+    });
+    setConflicts(result);
+    if (result.hasConflict) {
+      toast.warning("Potential conflicts detected!");
+    } else {
+      toast.success("No conflicts found!");
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = eventSchema.safeParse({ title, description, venue, event_date: eventDate, category });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0].message);
-      return;
-    }
+    if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
     await createEvent.mutateAsync({
-      title: parsed.data.title!,
-      description: parsed.data.description!,
-      venue: parsed.data.venue!,
-      event_date: parsed.data.event_date!,
-      category: parsed.data.category!,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      venue: parsed.data.venue,
+      event_date: parsed.data.event_date,
+      category: parsed.data.category,
+      max_capacity: maxCapacity ? parseInt(maxCapacity) : undefined,
+      registration_deadline: regDeadline || undefined,
     });
     setOpen(false);
-    setTitle("");
-    setDescription("");
-    setVenue("");
-    setEventDate("");
-    setCategory("workshop");
+    setTitle(""); setDescription(""); setVenue(""); setEventDate(""); setCategory("workshop"); setMaxCapacity(""); setRegDeadline(""); setConflicts(null);
   };
 
   const statusColors: Record<string, string> = {
     upcoming: "bg-primary/10 text-primary border-primary/20",
     ongoing: "bg-campus-coral/10 text-campus-coral border-campus-coral/20",
     completed: "bg-muted text-muted-foreground border-border",
+    draft: "bg-muted text-muted-foreground border-border",
+    registration_closed: "bg-campus-gold/10 text-campus-gold border-campus-gold/20",
   };
 
   return (
@@ -144,130 +163,136 @@ export default function OrganizerDashboard() {
             </h1>
             <p className="text-muted-foreground mt-1">Create and manage your campus events</p>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                <Plus className="h-4 w-4" /> Create Event
+          <div className="flex gap-2">
+            <Link to="/dashboard/organizer/analytics">
+              <Button variant="outline" className="gap-2">
+                <BarChart3 className="h-4 w-4" /> Analytics
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  Create New Event
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Event Title</Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Tech Talk: AI in Education" 
-                    value={title} 
-                    onChange={(e) => setTitle(e.target.value)} 
-                    required 
-                    className="h-11"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger className="h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>
-                            <span className="flex items-center gap-2">
-                              <span>{cat.icon}</span>
-                              <span>{cat.label}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date & Time</Label>
-                    <Input 
-                      id="date" 
-                      type="datetime-local" 
-                      value={eventDate} 
-                      onChange={(e) => setEventDate(e.target.value)} 
-                      required 
-                      className="h-11"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue">Venue</Label>
-                  <Input 
-                    id="venue" 
-                    placeholder="Auditorium A, Main Campus" 
-                    value={venue} 
-                    onChange={(e) => setVenue(e.target.value)} 
-                    required 
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="desc">Description</Label>
-                  <Textarea 
-                    id="desc" 
-                    placeholder="Describe the event..." 
-                    rows={4} 
-                    value={description} 
-                    onChange={(e) => setDescription(e.target.value)} 
-                    required 
-                    className="resize-none"
-                  />
-                </div>
-                <Button type="submit" className="w-full h-11" disabled={createEvent.isPending}>
-                  {createEvent.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating...
-                    </span>
-                  ) : (
-                    "Create Event"
-                  )}
+            </Link>
+            <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setConflicts(null); }}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 shadow-lg shadow-primary/20">
+                  <Plus className="h-4 w-4" /> Create Event
                 </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    Create New Event
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCreate} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Event Title</Label>
+                    <Input id="title" placeholder="Tech Talk: AI in Education" value={title} onChange={(e) => setTitle(e.target.value)} required className="h-11" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={category} onValueChange={setCategory}>
+                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              <span className="flex items-center gap-2"><span>{cat.icon}</span><span>{cat.label}</span></span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date & Time</Label>
+                      <Input type="datetime-local" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required className="h-11" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Venue</Label>
+                    <Input placeholder="Auditorium A, Main Campus" value={venue} onChange={(e) => setVenue(e.target.value)} required className="h-11" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Max Capacity <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                      <Input type="number" min="1" placeholder="e.g. 100" value={maxCapacity} onChange={(e) => setMaxCapacity(e.target.value)} className="h-11" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Reg. Deadline <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                      <Input type="datetime-local" value={regDeadline} onChange={(e) => setRegDeadline(e.target.value)} className="h-11" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Description</Label>
+                      <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-primary" onClick={handleAIGenerate} disabled={generateDesc.isPending}>
+                        {generateDesc.isPending ? <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                        AI Generate
+                      </Button>
+                    </div>
+                    <Textarea placeholder="Describe the event..." rows={4} value={description} onChange={(e) => setDescription(e.target.value)} required className="resize-none" />
+                  </div>
+
+                  {/* Conflict Check */}
+                  <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={handleConflictCheck} disabled={detectConflicts.isPending}>
+                    {detectConflicts.isPending ? <div className="w-3 h-3 border-2 border-border/30 border-t-foreground rounded-full animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                    Check for Conflicts
+                  </Button>
+
+                  {conflicts && (
+                    <div className={`p-3 rounded-lg text-sm ${conflicts.hasConflict ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-campus-success/10 text-campus-success border border-campus-success/20"}`}>
+                      {conflicts.hasConflict ? (
+                        <>
+                          <p className="font-medium mb-1">⚠️ Conflicts Detected:</p>
+                          {conflicts.conflicts?.map((c: any, i: number) => (
+                            <p key={i} className="text-xs">• {c.eventTitle}: {c.reason}</p>
+                          ))}
+                          {conflicts.suggestion && <p className="text-xs mt-2 font-medium">💡 {conflicts.suggestion}</p>}
+                        </>
+                      ) : (
+                        <p>✅ No conflicts found! {conflicts.suggestion}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <Button type="submit" className="w-full h-11" disabled={createEvent.isPending}>
+                    {createEvent.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Creating...
+                      </span>
+                    ) : "Create Event"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {isLoading ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-56 rounded-xl bg-muted/50 animate-pulse" />
-            ))}
+            {[1, 2, 3].map((i) => <div key={i} className="h-56 rounded-xl bg-muted/50 animate-pulse" />)}
           </div>
         ) : events && events.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => {
               const catStyle = categoryConfig[event.category || "other"] || categoryConfig.other;
               return (
-                <Card 
-                  key={event.id} 
-                  className="group relative overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-border/50"
-                >
-                  {/* Category gradient accent */}
+                <Card key={event.id} className="group relative overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-border/50">
                   <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${catStyle.gradient.replace('/10', '/50')}`} />
-                  
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{catStyle.icon}</span>
                         <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${statusColors[event.status] || ""}`}>
-                          {event.status}
+                          {event.status?.replace("_", " ")}
                         </Badge>
                       </div>
+                      {event.max_capacity && (
+                        <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          {event.registration_count || 0}/{event.max_capacity}
+                        </span>
+                      )}
                     </div>
-                    <CardTitle className="text-lg line-clamp-2 mt-2 group-hover:text-primary transition-colors">
-                      {event.title}
-                    </CardTitle>
+                    <CardTitle className="text-lg line-clamp-2 mt-2 group-hover:text-primary transition-colors">{event.title}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -292,7 +317,7 @@ export default function OrganizerDashboard() {
                     </div>
                     <Dialog open={viewEventId === event.id} onOpenChange={(v) => setViewEventId(v ? event.id : null)}>
                       <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full gap-2 group-hover:border-primary/50 transition-colors">
+                        <Button variant="outline" size="sm" className="w-full gap-2">
                           <Eye className="h-3.5 w-3.5" /> View Registrants
                         </Button>
                       </DialogTrigger>
@@ -310,9 +335,7 @@ export default function OrganizerDashboard() {
             </div>
             <h2 className="text-xl font-semibold text-foreground mb-2">No events yet</h2>
             <p className="text-muted-foreground mb-6">Create your first event to get started.</p>
-            <Button onClick={() => setOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" /> Create Event
-            </Button>
+            <Button onClick={() => setOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Create Event</Button>
           </Card>
         )}
       </div>
