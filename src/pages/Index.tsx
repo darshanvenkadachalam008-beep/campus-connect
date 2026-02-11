@@ -35,10 +35,10 @@ export default function Index() {
         <div className="absolute inset-0 gradient-hero opacity-80" />
         <div className="relative container h-full flex flex-col justify-center">
           <h1 className="text-4xl md:text-5xl font-bold text-primary-foreground mb-4 max-w-2xl">
-            Discover & Join Campus Events
+            Your AI-Powered Campus Event Hub
           </h1>
           <p className="text-lg text-primary-foreground/80 mb-6 max-w-lg">
-            Your one-stop hub for all college events. Never miss a workshop, fest, or meetup again.
+            Discover, join, and manage campus events with intelligent recommendations, automated emails, and real-time analytics.
           </p>
           <div className="flex gap-3">
             <Link to="/events">
