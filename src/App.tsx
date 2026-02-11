@@ -11,6 +11,7 @@ import EventDetail from "./pages/EventDetail";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import OrganizerAnalytics from "./pages/OrganizerAnalytics";
 import ParticipantDashboard from "./pages/ParticipantDashboard";
+import QRCheckin from "./pages/QRCheckin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/dashboard/organizer" element={<OrganizerDashboard />} />
             <Route path="/dashboard/organizer/analytics" element={<OrganizerAnalytics />} />
             <Route path="/dashboard/participant" element={<ParticipantDashboard />} />
+            <Route path="/checkin" element={<QRCheckin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.event-lifecycle]
 verify_jwt = false
+
+[functions.qr-checkin]
+verify_jwt = false
+
+[functions.generate-certificates]
+verify_jwt = false

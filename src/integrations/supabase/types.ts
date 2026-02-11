@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          checked_in_at: string
+          event_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          checked_in_at?: string
+          event_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          checked_in_at?: string
+          event_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificates: {
+        Row: {
+          certificate_number: string
+          emailed_at: string | null
+          event_id: string
+          id: string
+          issued_at: string
+          user_id: string
+        }
+        Insert: {
+          certificate_number: string
+          emailed_at?: string | null
+          event_id: string
+          id?: string
+          issued_at?: string
+          user_id: string
+        }
+        Update: {
+          certificate_number?: string
+          emailed_at?: string | null
+          event_id?: string
+          id?: string
+          issued_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_views: {
         Row: {
           event_id: string
@@ -59,6 +137,7 @@ export type Database = {
           id: string
           max_capacity: number | null
           organizer_id: string
+          qr_token: string | null
           registration_deadline: string | null
           status: string
           title: string
@@ -73,6 +152,7 @@ export type Database = {
           id?: string
           max_capacity?: number | null
           organizer_id: string
+          qr_token?: string | null
           registration_deadline?: string | null
           status?: string
           title: string
@@ -87,6 +167,7 @@ export type Database = {
           id?: string
           max_capacity?: number | null
           organizer_id?: string
+          qr_token?: string | null
           registration_deadline?: string | null
           status?: string
           title?: string
